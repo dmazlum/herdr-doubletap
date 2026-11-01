@@ -4,7 +4,6 @@ import { h_flex, v_flex } from "gpui-base";
 import { theme, spaces, knownAgents, closeOverlay, props, shared, setShared } from "herdr";
 import { KEY, TERMINAL, agentChoice, picked } from "./tap.js";
 
-export const WIDTH = 250;
 export const MAX_HEIGHT = 460;
 
 /** The popup's height for `n` agents (the frame follows its content, up to MAX_HEIGHT). */

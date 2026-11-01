@@ -12,7 +12,10 @@ Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
 const { KEY, DEFAULT_WAIT, SLOP, NEW_MENU, TERMINAL, choice, agentChoice, picked, launch, resolveAgent, waitFrom, Taps } = await import("../mods/doubletap/tap.js");
 const { store, state } = await import("./stubs/herdr.mjs");
 const { default: DoubleTap } = await import("../mods/doubletap/main.js");
-const { useDoubletap } = await import("../scripts/layout.mjs");
+const { useDoubletap, useTabs, mods } = await import("../scripts/layout.mjs");
+const { EmptyBar, POPUP } = await import("../mods/doubletap/bar.js");
+const { MAX_HEIGHT } = await import("../mods/doubletap/settings.js");
+const { div, h_flex } = await import("./stubs/gpui.mjs");
 
 const press = (count, x = 500, y = 20) => ({ click_count: count, position: { x, y } });
 
@@ -121,18 +124,18 @@ async function bar() {
   const cx = fakeCx();
   v.init({}, cx);
   await Promise.all(cx.tasks);
-  v.activatedAt = 0; // as if the window had been active for a while
+  v.bar.activatedAt = 0; // as if the window had been active for a while
   return v;
 }
 
 test("double-click on the empty bar opens a terminal by default and keeps the window from maximizing", async () => {
   const v = await bar();
   const cx = fakeCx();
-  v.emptyDown(press(1), cx);
-  v.emptyUp(press(1), cx);
+  v.bar.down(press(1), cx);
+  v.bar.up(press(1), cx);
   assert.equal(cx.timers.length, 1, "the first click waits");
   assert.equal(cx.timers[0].ms, DEFAULT_WAIT + 30, "the system's interval (unset here: 500 ms)");
-  v.emptyDown(press(2), cx);
+  v.bar.down(press(2), cx);
   assert.equal(cx.timers[0].cancelled, true, "the second press cancels the settings popup");
   assert.equal(cx.stopped, 1);
   assert.deepEqual(state.runs, [["tab.new", { space: "sp1" }]]);
@@ -142,22 +145,22 @@ test("double-click on the empty bar opens a terminal by default and keeps the wi
 test("double-click with Menu opens the + menu where clicked", async () => {
   store.set(KEY, { kind: "menu" });
   const v = await bar();
-  v.emptyDown(press(2, 640, 18), fakeCx());
+  v.bar.down(press(2, 640, 18), fakeCx());
   assert.deepEqual(state.runs, []);
   assert.deepEqual(state.overlays, [{ mod: "new-menu", kind: "popup", width: 250, height: 512, at: { x: 640, y: 18 } }]);
 });
 
 test("double-click with an agent starts it in a new tab", async () => {
   store.set(KEY, agentChoice(claude));
-  (await bar()).emptyDown(press(2), fakeCx());
+  (await bar()).bar.down(press(2), fakeCx());
   assert.deepEqual(state.runs, [["tab.new", { name: "Claude Code", space: "sp1", argv: ["claude"] }]]);
 });
 
 test("a lone click opens the settings popup where it was clicked, after the wait", async () => {
   const v = await bar();
   const cx = fakeCx();
-  v.emptyDown(press(1, 700, 22), cx);
-  v.emptyUp(press(1, 700, 22), cx);
+  v.bar.down(press(1, 700, 22), cx);
+  v.bar.up(press(1, 700, 22), cx);
   assert.deepEqual(state.overlays, []);
   cx.timers[0].fn(fakeCx());
   assert.equal(state.overlays.length, 1);
@@ -202,6 +205,58 @@ test("the layout script swaps only the tab bar", () => {
   assert.equal(layout.children[1].children[0].window_drag, true);
   assert.equal(layout.children[0].content.mod, "spaces");
   assert.equal(useDoubletap(layout), 0, "running it again changes nothing");
+  assert.deepEqual(mods(layout), ["spaces", "doubletap", "tabs-extra"]);
+  assert.equal(useTabs(layout), 1, "and back");
+  assert.equal(layout.children[1].children[0].content.mod, "tabs");
+});
+
+test("mods lists pane headers too, and survives odd nodes", () => {
+  assert.deepEqual(mods({ children: [null, { content: { pane: { header: { content: { mod: "my-header" } } } } }] }), ["my-header"]);
+  assert.equal(useDoubletap(null), 0);
+});
+
+test("the choice popup opens as tall as the popup allows", () => {
+  assert.equal(POPUP.height, MAX_HEIGHT);
+  assert.equal(POPUP.mod, "doubletap");
+});
+
+test("bar.js and tap.js can be copied into another mod: they import only herdr and each other", () => {
+  for (const f of ["bar.js", "tap.js"]) {
+    const src = readFileSync(new URL(`../mods/doubletap/${f}`, import.meta.url), "utf8");
+    const from = [...src.matchAll(/^import .* from "([^"]+)";/gm)].map((m) => m[1]);
+    for (const m of from) assert.ok(["herdr", "./tap.js"].includes(m), `${f} imports ${m}`);
+  }
+});
+
+// The README's "Your own tab bar" example, as another person's mod would write it.
+class MyTabs {
+  init(_props, cx) { this.dt = new EmptyBar(cx); }
+  render() {
+    this.dt.track();
+    const tab = div().id("tab").on_mouse_down("left", (_e, cx) => { cx.stop_propagation(); this.dt.cancel(); });
+    return h_flex().child(h_flex().id("empty").flex_1()
+      .on_mouse_down("left", (e, cx) => this.dt.down(e, cx))
+      .on_mouse_up("left", (e, cx) => this.dt.up(e, cx))
+      .child(tab));
+  }
+}
+
+test("the README's own-tab-bar example works with the copied files", async () => {
+  const v = new MyTabs();
+  const cx = fakeCx();
+  v.init({}, cx);
+  await Promise.all(cx.tasks);
+  const root = v.render();
+  const empty = root.calls.find((c) => c[0] === "child")[1];
+  const handler = (el, name) => el.calls.find((c) => c[0] === name && c[1] === "left")[2];
+  v.dt.activatedAt = 0;
+  const hx = fakeCx();
+  handler(empty, "on_mouse_down")(press(1), hx);
+  handler(empty, "on_mouse_up")(press(1), hx);
+  hx.timers[0].fn(fakeCx());
+  assert.deepEqual(state.overlays.map((o) => [o.mod, o.props]), [["doubletap", { view: "settings" }]], "a click opens doubletap's popup");
+  handler(empty, "on_mouse_down")(press(2), hx);
+  assert.deepEqual(state.runs, [["tab.new", { space: "sp1" }]], "a double-click starts the choice");
 });
 
 test("no other product is named anywhere in the repo", () => {
@@ -221,9 +276,9 @@ test("no other product is named anywhere in the repo", () => {
 test("a triple-click on the empty bar starts one terminal", async () => {
   const v = await bar();
   const cx = fakeCx();
-  v.emptyDown(press(1), cx); v.emptyUp(press(1), cx);
-  v.emptyDown(press(2), cx); v.emptyUp(press(2), cx);
-  v.emptyDown(press(3), cx); v.emptyUp(press(3), cx);
+  v.bar.down(press(1), cx); v.bar.up(press(1), cx);
+  v.bar.down(press(2), cx); v.bar.up(press(2), cx);
+  v.bar.down(press(3), cx); v.bar.up(press(3), cx);
   assert.equal(state.runs.length, 1);
   assert.equal(cx.stopped, 2, "neither the second nor the third press maximizes the window");
 });
@@ -231,13 +286,13 @@ test("a triple-click on the empty bar starts one terminal", async () => {
 test("pressing a tab cancels a waiting click and forgets its press", async () => {
   const v = await bar();
   const cx = fakeCx();
-  v.emptyDown(press(1), cx); v.emptyUp(press(1), cx);
-  v.cancel(); // what a tab's or button's press does
+  v.bar.down(press(1), cx); v.bar.up(press(1), cx);
+  v.bar.cancel(); // what a tab's or button's press does
   assert.equal(cx.timers[0].cancelled, true);
 
-  v.emptyDown(press(1, 300), cx); // then a window drag: no release arrives
-  v.cancel();
-  v.emptyUp(press(1, 300), cx); // a later tab click's release bubbling up
+  v.bar.down(press(1, 300), cx); // then a window drag: no release arrives
+  v.bar.cancel();
+  v.bar.up(press(1, 300), cx); // a later tab click's release bubbling up
   assert.equal(cx.timers.length, 1, "no popup from the stale press");
 });
 
@@ -245,13 +300,13 @@ test("the click that activates the window opens no popup", async () => {
   const v = await bar();
   const cx = fakeCx();
   state.active = false;
-  v.emptyDown(press(1), cx); v.emptyUp(press(1), cx);
+  v.bar.down(press(1), cx); v.bar.up(press(1), cx);
   state.active = true;
-  v.activatedAt = Date.now();
-  v.emptyDown(press(1), cx); v.emptyUp(press(1), cx);
+  v.bar.activatedAt = Date.now();
+  v.bar.down(press(1), cx); v.bar.up(press(1), cx);
   assert.equal(cx.timers.length, 0);
-  v.activatedAt = Date.now() - 1000;
-  v.emptyDown(press(1), cx); v.emptyUp(press(1), cx);
+  v.bar.activatedAt = Date.now() - 1000;
+  v.bar.down(press(1), cx); v.bar.up(press(1), cx);
   assert.equal(cx.timers.length, 1, "later clicks work again");
 });
 
@@ -260,13 +315,13 @@ test("an agent picked elsewhere and missing here gives a warning, not a broken t
   const v = await bar();
   const cx = fakeCx();
   state.agents = [];
-  v.emptyDown(press(2), cx);
+  v.bar.down(press(2), cx);
   await Promise.all(cx.tasks);
   assert.deepEqual(state.runs, []);
   assert.equal(state.notes[0].title, "Claude Code isn't installed on this computer");
 
   state.agents = [claude];
-  v.emptyDown(press(2), cx);
+  v.bar.down(press(2), cx);
   await Promise.all(cx.tasks);
   assert.deepEqual(state.runs, [["tab.new", { name: "Claude Code", space: "sp1", argv: ["claude"] }]]);
 });

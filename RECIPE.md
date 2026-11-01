@@ -11,11 +11,19 @@ What the mod does, precisely enough to rebuild it.
 - `upstream/tabs.main.js`: the shipped tab bar it was cloned from. `test/upstream.test.js`
   compares it with the installed `mods/tabs/main.js` (skipped where Herdr isn't installed).
 - `tap.js`: plain logic (no UI), imported by the tests.
+- `bar.js`: `EmptyBar`, the click handling for an empty tab bar (`track`, `cancel`,
+  `down`, `up`), used by this mod's bar and copied into other tab bar mods by
+  `scripts/vendor.sh`. It and `tap.js` import only `herdr` and each other, because Herdr
+  refuses imports from outside a mod's own folder.
 - `settings.js`: the choice popup. The same mod draws it: `main.js` checks
   `props().view === "settings"` or `props().overlay` in `init` and hands over to `Settings`.
 - `scripts/install.sh`: copies the mod into `~/.config/herdr-app/mods/doubletap`. With
-  `--layout`, also `layout.clone {name: "main", as: "doubletap"}` (once), rewrites its
-  `content.mod: "tabs"` to `"doubletap"` with `scripts/layout.mjs`, and switches to it.
+  `--layout [name]` (default main): first `scripts/layout.mjs --check` (exit 3, nothing
+  written, when the layout has no `tabs` block); a shipped layout (main, terminals,
+  win98) is `layout.clone`d once (main as `doubletap`, others as `<name>-doubletap`), a
+  personal one is backed up once as `<name>.json.before-doubletap`; then every
+  `content.mod: "tabs"` becomes `"doubletap"` and the layout is switched to. Running it
+  again is fine. `--remove <name>` turns `doubletap` blocks back into `tabs`.
 
 ## The choice
 

@@ -30,5 +30,7 @@ jobs:
         run: for f in mods/*/*.js; do node --check "$f" || exit 1; done
       - name: Manifests are JSON
         run: node -e "const fs=require('fs'); for (const f of fs.readdirSync('mods').map(m=>'mods/'+m+'/mod.json')) JSON.parse(fs.readFileSync(f,'utf8'))"
+      - name: Scripts parse
+        run: for f in scripts/*.sh; do sh -n "$f" || exit 1; done; node --check scripts/layout.mjs
       - name: Test
         run: npm test
