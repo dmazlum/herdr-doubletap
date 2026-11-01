@@ -9,6 +9,8 @@ and you choose what a double-click does from then on:
   double-clicked.
 - **An agent**: one of your installed agents (Claude Code, Codex, …) starts in a new tab.
 
+![Double-tap](preview.png)
+
 The choice is kept in Herdr's shared state (`doubletap.action`), so it survives restarts.
 You can also open the choice from a key: bind `mod.open:doubletap` in `keys.json`.
 
@@ -19,6 +21,10 @@ themselves: `npm test` fails when the installed Herdr ships a different tab bar,
 tab bar, so this layout and Herdr's main layout remember it separately.
 
 ## Install
+
+From [herdr.dev/mods](https://herdr.dev/mods): ask your agent to add
+`herdr.dev/mods/dmazlum/doubletap`. That copies `mods/doubletap/`; the mod shows up once a
+layout's tab bar block names it (below). Or from this repo:
 
 ```sh
 git clone https://github.com/dmazlum/herdr-doubletap.git
@@ -116,6 +122,11 @@ herdr-app check ~/.config/herdr-app/mods/doubletap
 
 Copy, don't symlink: Herdr doesn't reload a symlinked mod folder when its files change.
 See [RECIPE.md](RECIPE.md) for the full behavior.
+
+## What it runs
+
+Once per tab bar, on macOS: `defaults read -g com.apple.mouse.doubleClick`, to wait as
+long as your double-click interval. No network, and no files outside its own folder.
 
 ## License
 
