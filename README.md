@@ -38,6 +38,28 @@ switches to it. Settings shows it with its own picture (`art/layout-preview.svg`
 to `layouts/doubletap.svg`). Back to Herdr's own: `npm run remove-layout -- doubletap`, or pick
 another layout in Settings.
 
+## Updates
+
+Herdr updates its own mods, not ones you added: yours is a copy, and nothing tells you
+when this repo changes. To hear about a new version, watch the repo for releases (on
+GitHub: **Watch → Custom → Releases**). Each
+[release](https://github.com/dmazlum/herdr-doubletap/releases) says what changed and whether
+`keys.json` did; merge it again when it did.
+
+The version you have is `"version"` in `~/.config/herdr-app/mods/doubletap/mod.json`.
+To update, ask your agent to replace that folder with the latest `mods/doubletap` from
+`github.com/dmazlum/herdr-doubletap`. Adding it again isn't enough: an agent never
+overwrites a mod, it would add a second copy under a new name. Or from your clone:
+
+```sh
+cd herdr-doubletap
+git pull
+npm run sync
+```
+
+`sync` replaces the mod and leaves your layouts alone; a release says when
+`npm run install-layout` has to run again.
+
 ## In other layouts
 
 What a double-click does is one choice for every layout (`doubletap.action`), and the
