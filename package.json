@@ -1,0 +1,17 @@
+{
+  "name": "herdr-doubletap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Herdr's tab bar with one addition: double-click the empty space beside the tabs to open a new terminal, the + menu, or an agent you pick.",
+  "repository": { "type": "git", "url": "git+https://github.com/dmazlum/herdr-doubletap.git" },
+  "bugs": { "url": "https://github.com/dmazlum/herdr-doubletap/issues" },
+  "homepage": "https://github.com/dmazlum/herdr-doubletap#readme",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "sync": "sh scripts/install.sh",
+    "install-layout": "sh scripts/install.sh --layout"
+  }
+}
