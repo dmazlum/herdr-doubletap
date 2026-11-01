@@ -46,6 +46,11 @@ case "$name" in
         exit "$code"
       }
       herdr-app do layout.clone "{\"name\":\"$name\",\"as\":\"$target\"}" >/dev/null
+    fi
+    # The clone of main is ours: give it a picture in Settings (one it has is kept).
+    if [ "$target" = doubletap ]; then
+      cp "$here/art/layout-preview.svg" "$home/layouts/doubletap.svg"
+      node "$here/scripts/layout.mjs" "$home/layouts/doubletap.json" --preview layouts/doubletap.svg
     fi ;;
   *)
     target=$name

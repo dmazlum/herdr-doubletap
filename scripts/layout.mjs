@@ -3,6 +3,7 @@
 //   node scripts/layout.mjs <layout.json>            tabs → doubletap
 //   node scripts/layout.mjs <layout.json> --remove   doubletap → tabs
 //   node scripts/layout.mjs <layout.json> --check    whether tabs → doubletap would work; writes nothing
+//   node scripts/layout.mjs <layout.json> --preview <layouts/x.svg>   sets the settings picture if it has none
 //
 // Exits 3 (and changes nothing) when the layout has no block of the mod to
 // replace: it draws its tab bar with a mod of its own, which needs bar.js instead.
@@ -32,10 +33,22 @@ export function swap(node, from, to) {
 export const useDoubletap = (layout) => swap(layout, "tabs", "doubletap");
 export const useTabs = (layout) => swap(layout, "doubletap", "tabs");
 
+/** Gives the layout the settings-screen picture `path` unless it has one; returns whether it did. */
+export function setPreview(layout, path) {
+  if (layout.preview) return false;
+  layout.preview = path;
+  return true;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [file, flag] = process.argv.slice(2);
-  if (!file) { console.error("usage: node scripts/layout.mjs <layout.json> [--remove | --check]"); process.exit(2); }
+  const [file, flag, arg] = process.argv.slice(2);
+  if (!file) { console.error("usage: node scripts/layout.mjs <layout.json> [--remove | --check | --preview <layouts/x.svg>]"); process.exit(2); }
   const layout = JSON.parse(readFileSync(file, "utf8"));
+  if (flag === "--preview") {
+    if (!arg) { console.error("--preview needs a path, like layouts/doubletap.svg"); process.exit(2); }
+    if (setPreview(layout, arg)) writeFileSync(file, JSON.stringify(layout, null, 2) + "\n");
+    process.exit(0);
+  }
   const remove = flag === "--remove", check = flag === "--check";
   const n = remove ? useTabs(layout) : useDoubletap(layout);
   if (n === 0 && !remove && mods(layout).includes("doubletap")) {

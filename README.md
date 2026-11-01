@@ -34,7 +34,8 @@ npm run install-layout
 
 This copies the mod to `~/.config/herdr-app/mods/doubletap`, makes a `doubletap` layout
 (a clone of Herdr's main layout, via `layout.clone`) whose tab bar is this mod, and
-switches to it. Back to Herdr's own: `npm run remove-layout -- doubletap`, or pick
+switches to it. Settings shows it with its own picture (`art/layout-preview.svg`, copied
+to `layouts/doubletap.svg`). Back to Herdr's own: `npm run remove-layout -- doubletap`, or pick
 another layout in Settings.
 
 ## In other layouts

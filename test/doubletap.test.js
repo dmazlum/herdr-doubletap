@@ -12,7 +12,7 @@ Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
 const { KEY, DEFAULT_WAIT, SLOP, NEW_MENU, TERMINAL, choice, agentChoice, picked, launch, resolveAgent, waitFrom, Taps } = await import("../mods/doubletap/tap.js");
 const { store, state } = await import("./stubs/herdr.mjs");
 const { default: DoubleTap } = await import("../mods/doubletap/main.js");
-const { useDoubletap, useTabs, mods } = await import("../scripts/layout.mjs");
+const { useDoubletap, useTabs, mods, setPreview } = await import("../scripts/layout.mjs");
 const { EmptyBar, POPUP } = await import("../mods/doubletap/bar.js");
 const { MAX_HEIGHT } = await import("../mods/doubletap/settings.js");
 const { div, h_flex } = await import("./stubs/gpui.mjs");
@@ -324,4 +324,18 @@ test("an agent picked elsewhere and missing here gives a warning, not a broken t
   v.bar.down(press(2), cx);
   await Promise.all(cx.tasks);
   assert.deepEqual(state.runs, [["tab.new", { name: "Claude Code", space: "sp1", argv: ["claude"] }]]);
+});
+
+test("setPreview gives a layout a settings picture, keeping one it has", () => {
+  const bare = { id: "root" };
+  assert.equal(setPreview(bare, "layouts/doubletap.svg"), true);
+  assert.equal(bare.preview, "layouts/doubletap.svg");
+  const own = { id: "root", preview: "layouts/mine.png" };
+  assert.equal(setPreview(own, "layouts/doubletap.svg"), false);
+  assert.equal(own.preview, "layouts/mine.png");
+});
+
+test("the layout preview is an SVG the settings screen can show", () => {
+  const svg = readFileSync(new URL("../art/layout-preview.svg", import.meta.url), "utf8");
+  assert.match(svg, /^<svg [^>]*viewBox="0 0 320 200"/);
 });
