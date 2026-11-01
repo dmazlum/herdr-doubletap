@@ -1,1 +1,1 @@
-{ "place": "none", "title": "Double-tap tabs" }
+{ "place": "none", "title": "Double-tap tabs", "overlay": { "kind": "popup", "width": 250, "height": 460 } }

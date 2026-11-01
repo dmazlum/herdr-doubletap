@@ -5,10 +5,11 @@ import { theme, spaces, knownAgents, closeOverlay, props, shared, setShared } fr
 import { KEY, TERMINAL, agentChoice, picked } from "./tap.js";
 
 export const WIDTH = 250;
+export const MAX_HEIGHT = 460;
 
-/** Height for a list of `n` agents, so the popup fits its rows without a scrollbar when it can. */
+/** The popup's height for `n` agents (the frame follows its content, up to MAX_HEIGHT). */
 export function height(n) {
-  return Math.min(460, 150 + Math.max(1, n) * 31);
+  return Math.min(MAX_HEIGHT, 150 + Math.max(1, n) * 31);
 }
 
 export class Settings {
@@ -17,8 +18,10 @@ export class Settings {
     this.loading = true;
     this.handle = cx.focus_handle();
     this.handle.focus();
+    // Agents as the shown space's machine knows them; the pick remembers that machine.
+    this.machine = spaces().find((s) => s.active)?.machine ?? null;
     cx.spawn(async (cx) => {
-      try { this.agents = (await knownAgents({ on: spaces().find((s) => s.active)?.machine })).filter((a) => a.installed); }
+      try { this.agents = (await knownAgents({ on: this.machine })).filter((a) => a.installed); }
       catch { this.failed = true; }
       this.loading = false;
       cx.notify();
@@ -50,14 +53,14 @@ export class Settings {
         if (e.modifiers.control || e.modifiers.platform || e.modifiers.alt) return;
         if (e.key === "t") this.pick(TERMINAL);
         else if (e.key === "m") this.pick({ kind: "menu" });
-        else if (/^[1-9]$/.test(e.key) && this.agents[Number(e.key) - 1]) this.pick(agentChoice(this.agents[Number(e.key) - 1]));
+        else if (/^[1-9]$/.test(e.key) && this.agents[Number(e.key) - 1]) this.pick(agentChoice(this.agents[Number(e.key) - 1], this.machine));
       })
       .child(div().px(9).pt(4).pb(2).text_size(12).font_semibold().text_color(t.foreground).child("Double-click opens"))
       .child(this.row("terminal", svg("icons/shell.svg").size(14), "Terminal", TERMINAL, "T"))
       .child(this.row("menu", div().child("+"), "Menu, choose each time", { kind: "menu" }, "M"))
       .child(heading("An agent"))
       .child(v_flex().flex_1().min_h(0).overflow_y_scrollbar()
-        .children(this.agents.map((a, i) => this.row(a.key, a.tint ? svg(a.icon).size(14).text_color(t.foreground) : image(a.icon).size(14), a.name, agentChoice(a), i < 9 ? String(i + 1) : "")))
+        .children(this.agents.map((a, i) => this.row(a.key, a.tint ? svg(a.icon).size(14).text_color(t.foreground) : image(a.icon).size(14), a.name, agentChoice(a, this.machine), i < 9 ? String(i + 1) : "")))
         .when(this.agents.length === 0, (el) => el.child(div().px(9).py(6).text_color(t.dim)
           .child(this.loading ? "Checking installed agents…" : this.failed ? "Could not load agents" : "No agents installed"))));
   }

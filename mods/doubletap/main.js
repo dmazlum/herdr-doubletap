@@ -1,8 +1,8 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, props } from "herdr";
-import { KEY, WAIT, Taps, launch } from "./tap.js";
-import { Settings, WIDTH } from "./settings.js";
+import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, props, exec, knownAgents, notify } from "herdr";
+import { KEY, DEFAULT_WAIT, ACTIVATION, NEW_MENU, Taps, launch, resolveAgent, waitFrom } from "./tap.js";
+import { Settings, WIDTH, MAX_HEIGHT } from "./settings.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -17,11 +17,21 @@ function find(node, id) {
 // what you picked (a terminal, the + menu, or an agent); click it once to pick.
 export default class DoubleTap extends View {
   init(_props, cx) {
-    // Opened as the settings popup rather than as the bar.
-    if (props()?.view === "settings") { this.settings = new Settings(); this.settings.init(cx); return; }
+    // Opened as an overlay (a single click, or `mod.open:doubletap`): the settings popup, not the bar.
+    if (props()?.view === "settings" || props()?.overlay) { this.settings = new Settings(); this.settings.init(cx); return; }
     this.pressed = null;
     this.taps = new Taps();
     this.waiting = null;
+    this.wait = DEFAULT_WAIT;
+    this.wasActive = Boolean(window()?.active);
+    this.activatedAt = 0;
+    // A lone click waits as long as the system's double-click interval.
+    if (window()?.platform === "macos") cx.spawn(async () => {
+      try {
+        const r = await exec("defaults", ["read", "-g", "com.apple.mouse.doubleClick"]);
+        this.wait = waitFrom(r.code === 0 ? r.stdout : "");
+      } catch { this.wait = waitFrom(""); }
+    });
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
   }
 
@@ -53,25 +63,43 @@ export default class DoubleTap extends View {
     localStorage.setItem("panels", JSON.stringify(this.panels));
   }
 
-  // A second press does the action at once. A lone click waits a moment for
-  // one; if none comes, it opens the settings where it was clicked.
+  // Something other than the empty bar was pressed (a tab): no click of ours is under way.
+  cancel() {
+    this.taps.forget();
+    this.waiting?.cancel(); this.waiting = null;
+  }
+
+  // A second press does the action at once. A lone click waits for one; if none
+  // comes, it opens the settings where it was clicked.
   emptyDown(e, cx) {
-    if (this.taps.down(e) !== "double") return;
+    const activating = !window()?.active || Date.now() - this.activatedAt < ACTIVATION;
+    if (this.taps.down(e, activating) !== "double") {
+      if (e.click_count > 2) cx.stop_propagation(); // nor a third press
+      return;
+    }
     cx.stop_propagation(); // a double-click here isn't the window's maximize
     this.waiting?.cancel(); this.waiting = null;
     const space = spaces().find(p => p.active);
-    const did = launch(shared(KEY), space?.id, { x: e.position.x, y: e.position.y });
+    const did = launch(shared(KEY), space, { x: e.position.x, y: e.position.y });
     if (did.overlay) openOverlay(did.overlay);
-    else run(...did.run);
+    else if (did.run) run(...did.run);
+    else if (did.lookup) cx.spawn(async () => {
+      // Picked while another machine's space showed: start it as this space's machine knows it.
+      let agents = [];
+      try { agents = await knownAgents({ on: space?.machine }); } catch { /* reported as missing */ }
+      const r = resolveAgent(did.lookup, space, agents);
+      if (r.run) run(...r.run);
+      else notify({ title: r.missing, body: "Click the empty tab bar to pick what a double-click opens.", level: "warning" });
+    });
   }
 
   emptyUp(e, cx) {
     if (this.taps.up(e) !== "single") return;
     const at = { x: e.position.x, y: e.position.y };
     this.waiting?.cancel();
-    this.waiting = cx.timer.after(WAIT, () => {
+    this.waiting = cx.timer.after(this.wait, () => {
       this.waiting = null;
-      openOverlay({ mod: "doubletap", kind: "popup", width: WIDTH, height: 460, at, props: { view: "settings" } });
+      openOverlay({ mod: "doubletap", kind: "popup", width: WIDTH, height: MAX_HEIGHT, at, props: { view: "settings" } });
     });
   }
 
@@ -80,7 +108,7 @@ export default class DoubleTap extends View {
     const t = theme();
     const space = spaces().find(p => p.active);
     const shown = space?.tabs ?? [];
-    const stop = (_e, cx) => cx.stop_propagation();
+    const stop = (_e, cx) => { cx.stop_propagation(); this.cancel(); };
     const button = (id, label, action) => div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", stop).on_click(action).child(label);
     const item = (c, i) => {
@@ -89,7 +117,7 @@ export default class DoubleTap extends View {
       return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
         .border(1).border_color(c.active ? t.border : t.chrome).bg(c.active ? t.raised : t.chrome).text_color(c.active ? t.foreground : t.muted)
         .hover(s => s.bg(t.hover))
-        .on_mouse_down("left", (e, cx) => { cx.stop_propagation(); this.pressed = i; if (e.click_count === 2) run("tab.rename", { id: c.id }); })
+        .on_mouse_down("left", (e, cx) => { cx.stop_propagation(); this.cancel(); this.pressed = i; if (e.click_count === 2) run("tab.rename", { id: c.id }); })
         .on_mouse_up("left", () => {
           const from = this.pressed; this.pressed = null;
           if (from !== null && from !== i) run("tab.move", { id: shown[from].id, index: space.tabs.findIndex(x => x.id === c.id) + 1 });
@@ -103,6 +131,10 @@ export default class DoubleTap extends View {
         .when(c.active, el => el.child(div().id(`close-${c.id}`).text_color(t.dim).on_mouse_down("left", stop).on_click((_e, cx) => { cx.stop_propagation(); run("tab.close", { id: c.id }); }).child(svg("mods/pane/close.svg").size(12))));
     };
     const root = layout(), sidebar = find(root, "sidebar"), w = window();
+    // The press that brings the window forward isn't a click on the bar.
+    const active = Boolean(w?.active);
+    if (active && !this.wasActive) this.activatedAt = Date.now();
+    this.wasActive = active;
     // Old saved rails and a dragged-narrow sidebar can be smaller than the window buttons.
     const lightsPadding = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && root?.traffic_lights
       ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
@@ -121,13 +153,13 @@ export default class DoubleTap extends View {
         }).child(svg(icon).size(14)).child(label);
     };
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
-      .on_mouse_up("left", () => { this.pressed = null; this.taps.forget(); })
+      .on_mouse_up("left", () => { this.pressed = null; })
       .on_scroll_wheel(e => { if (Math.abs(e.delta.y) >= 1) run(e.delta.y > 0 ? "tab.prev" : "tab.next"); })
       .child(h_flex().id("tab-scroll").flex_1().min_w(0).h_full().items_center().gap(3).overflow_x_scrollbar()
         .on_mouse_down("left", (e, cx) => this.emptyDown(e, cx))
         .on_mouse_up("left", (e, cx) => this.emptyUp(e, cx))
         .children(shown.map(item)))
-      .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
+      .child(button("tab-new", "+", () => openOverlay({ ...NEW_MENU })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/doubletap/win-min.svg").size(16) : "−", () => run("window.minimize")))

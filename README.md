@@ -10,7 +10,13 @@ and you choose what a double-click does from then on:
 - **An agent**: one of your installed agents (Claude Code, Codex, …) starts in a new tab.
 
 The choice is kept in Herdr's shared state (`doubletap.action`), so it survives restarts.
-Everything else is Herdr's own tab bar, unchanged.
+You can also open the choice from a key: bind `mod.open:doubletap` in `keys.json`.
+
+Everything else is Herdr's tab bar as of tabs 0.1.11. A mod can't add to another mod, so
+this is a copy (`mod.clone`), and Herdr's updates to its own tab bar don't reach it by
+themselves: `npm test` fails when the installed Herdr ships a different tab bar, see
+[upstream/](upstream/README.md). The Files/Changes panel each space remembers is kept per
+tab bar, so this layout and Herdr's main layout remember it separately.
 
 ## Install
 
@@ -33,9 +39,15 @@ Already using your own layout? Point its tab bar block at the mod instead:
 - The empty bar is also where you drag the window. A double-click there would normally
   maximize the window; Double-tap takes the second press first, so it opens your choice
   instead. Dragging the window still works.
-- A single click waits 320 ms for a second one before opening the choice popup, so a
-  double-click never flashes the popup first.
+- A single click waits as long as your system's double-click interval (macOS: System
+  Settings → Mouse/Trackpad, 500 ms by default) for a second one before opening the choice
+  popup, so a double-click never shows the popup first.
+- A triple-click starts one thing, not two.
 - A press that moves more than 4 px before release is a drag, not a click.
+- The click that brings the Herdr window to the front opens nothing.
+- An agent remembers the machine it was picked on. Double-click in a space on another
+  machine and it starts as that machine knows it; if it isn't installed there, you get a
+  warning instead of a tab that fails.
 - Clicks on tabs, **+**, Files, Changes and the window buttons behave as before.
 
 In the choice popup, `T` picks Terminal, `M` the menu, and `1`–`9` an agent.
